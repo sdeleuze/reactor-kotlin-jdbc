@@ -28,7 +28,7 @@ with(ds) {
 }
 
 // Retrieve all users
-ds.select("SELECT * FROM USER)
+ds.select("SELECT * FROM USER")
         .toFlux { it.getInt("ID") to it.getString("USERNAME") }
         .subscribe(::println)
 
@@ -66,7 +66,7 @@ You can also use a standard `Connection` with these extension functions, and clo
 ```kotlin
 val connection = DriverManager.getConnection("jdbc:sqlite::memory:")
 
-connection.select("SELECT * FROM USER)
+connection.select("SELECT * FROM USER")
         .toFlux { it.getInt("ID") to it.getString("USERNAME") }
         .subscribe(::println)
 
