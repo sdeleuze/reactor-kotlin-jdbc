@@ -1,18 +1,14 @@
-
-import io.reactivex.Observable
-import io.reactivex.observers.TestObserver
-import io.reactivex.subscribers.TestSubscriber
+package io.projectreactor.addons.kotlin.jdbc
 import org.junit.Test
-import org.nield.rxkotlinjdbc.execute
-import org.nield.rxkotlinjdbc.insert
-import org.nield.rxkotlinjdbc.select
+import reactor.core.publisher.Flux
+import reactor.test.test
 import java.sql.DriverManager
 
-class DatabaseTest {
+class JdbcExtensionsTest {
 
-    val dbPath = "jdbc:sqlite::memory:"
+    private val dbPath = "jdbc:sqlite::memory:"
 
-    val connectionFactory = {
+    private val connectionFactory = {
 
         DriverManager.getConnection(dbPath).apply {
             createStatement().apply {
@@ -29,13 +25,11 @@ class DatabaseTest {
 
         val conn = connectionFactory()
 
-        val testSubscriber = TestSubscriber<Pair<Int,String>>()
-
         conn.select("SELECT * FROM USER")
-                .toFlowable { it.getInt("ID") to it.getString("USERNAME") }
-                .subscribe(testSubscriber)
-
-        testSubscriber.assertValueCount(2)
+                .toFlux { it.getInt("ID") to it.getString("USERNAME") }
+                .test()
+                .expectNextCount(2)
+                .verifyComplete()
 
         conn.close()
     }
@@ -45,14 +39,12 @@ class DatabaseTest {
 
         val conn = connectionFactory()
 
-        val testSubscriber = TestSubscriber<Pair<Int,String>>()
-
         conn.select("SELECT * FROM USER WHERE USERNAME LIKE :pattern and PASSWORD LIKE :pattern")
                 .parameter("pattern","%b%")
-                .toFlowable { it.getInt("ID") to it.getString("USERNAME") }
-                .subscribe(testSubscriber)
-
-        testSubscriber.assertValue(Pair(2,"bobmarshal"))
+                .toFlux { it.getInt("ID") to it.getString("USERNAME") }
+                .test()
+                .expectNext(Pair(2,"bobmarshal"))
+                .verifyComplete()
 
         conn.close()
     }
@@ -61,15 +53,12 @@ class DatabaseTest {
     fun parameterTest() {
         val conn = connectionFactory()
 
-        val testSubscriber = TestSubscriber<Pair<Int,String>>()
-
         conn.select("SELECT * FROM USER WHERE ID = ?")
                 .parameter(2)
-                .toSingle { it.getInt("ID") to it.getString("USERNAME") }
-                .toFlowable()
-                .subscribe(testSubscriber)
-
-        testSubscriber.assertValue(Pair(2,"bobmarshal"))
+                .toMono { it.getInt("ID") to it.getString("USERNAME") }
+                .test()
+                .expectNext(Pair(2,"bobmarshal"))
+                .verifyComplete()
 
         conn.close()
     }
@@ -79,15 +68,12 @@ class DatabaseTest {
 
         val conn = connectionFactory()
 
-        val testSubscriber = TestSubscriber<Pair<Int,String>>()
-
         conn.select("SELECT * FROM USER WHERE ID = :id")
                 .parameter("id",2)
-                .toSingle { it.getInt("ID") to it.getString("USERNAME") }
-                .toFlowable()
-                .subscribe(testSubscriber)
-
-        testSubscriber.assertValue(Pair(2,"bobmarshal"))
+                .toMono { it.getInt("ID") to it.getString("USERNAME") }
+                .test()
+                .expectNext(Pair(2,"bobmarshal"))
+                .verifyComplete()
 
         conn.close()
     }
@@ -98,14 +84,12 @@ class DatabaseTest {
 
         val conn = connectionFactory()
 
-        val testSubscriber = TestSubscriber<Pair<Int,String>>()
-
         conn.select("SELECT * FROM USER WHERE USERNAME LIKE :pattern and PASSWORD LIKE :pattern")
                 .parameter("pattern","%b%")
-                .toFlowable { it.getInt("ID") to it.getString("USERNAME") }
-                .subscribe(testSubscriber)
-
-        testSubscriber.assertValue(Pair(2,"bobmarshal"))
+                .toFlux { it.getInt("ID") to it.getString("USERNAME") }
+                .test()
+                .expectNext(Pair(2,"bobmarshal"))
+                .verifyComplete()
 
         conn.close()
     }
@@ -114,17 +98,15 @@ class DatabaseTest {
     fun flatMapSelectTest() {
         val conn = connectionFactory()
 
-        val testObserver = TestObserver<Pair<Int,String>>()
-
-        Observable.just(1,2)
-                .flatMapSingle {
+        Flux.just(1,2)
+                .flatMap {
                     conn.select("SELECT * FROM USER WHERE ID = :id")
                             .parameter("id",it)
-                            .toSingle { it.getInt("ID") to it.getString("USERNAME") }
+                            .toMono { it.getInt("ID") to it.getString("USERNAME") }
                 }
-                .subscribe(testObserver)
-
-        testObserver.assertValueCount(2)
+                .test()
+                .expectNextCount(2)
+                .verifyComplete()
 
         conn.close()
     }
@@ -133,20 +115,18 @@ class DatabaseTest {
     fun singleInsertTest() {
         val conn = connectionFactory()
 
-        val testSubscriber = TestSubscriber<Int>()
-
         conn.insert("INSERT INTO USER (USERNAME, PASSWORD) VALUES (:username,:password)")
                 .parameter("username","josephmarlon")
                 .parameter("password","coffeesnob43")
-                .toFlowable { it.getInt(1) }
-                .flatMapSingle {
+                .toFlux { it.getInt(1) }
+                .flatMap {
                     conn.select("SELECT * FROM USER WHERE ID = :id")
                             .parameter("id", it)
-                            .toSingle { "${it.getInt("ID")} ${it.getString("USERNAME")} ${it.getString("PASSWORD")}" }
+                            .toMono { "${it.getInt("ID")} ${it.getString("USERNAME")} ${it.getString("PASSWORD")}" }
                 }
-                .subscribe(::println)
-
-        testSubscriber.assertValues(3)
+                .test()
+                .expectNext("3 josephmarlon coffeesnob43")
+                .verifyComplete()
 
         conn.close()
     }
@@ -154,20 +134,19 @@ class DatabaseTest {
     @Test
     fun multiInsertTest() {
         val conn = connectionFactory()
-        val testObserver = TestObserver<Int>()
 
-        Observable.just(
+        Flux.just(
                 Pair("josephmarlon", "coffeesnob43"),
                 Pair("samuelfoley","shiner67"),
                 Pair("emilyearly","rabbit99")
-        ).flatMapSingle {
+        ).flatMap {
             conn.insert("INSERT INTO USER (USERNAME, PASSWORD) VALUES (:username,:password)")
                     .parameter("username",it.first)
                     .parameter("password",it.second)
-                    .toSingle { it.getInt(1) }
-        }.subscribe(testObserver)
-
-        testObserver.assertValues(3,4,5)
+                    .toMono { it.getInt(1) }
+        }.test()
+                .expectNext(3,4,5)
+                .verifyComplete()
 
         conn.close()
     }
@@ -177,29 +156,27 @@ class DatabaseTest {
 
         val conn = connectionFactory()
 
-        val testObserver = TestObserver<Int>()
-
         conn.execute("DELETE FROM USER WHERE ID = :id")
                 .parameter("id",2)
-                .toSingle()
-                .subscribe(testObserver)
+                .toMono()
+                .test()
+                .expectNext(1)
+                .verifyComplete()
 
-        testObserver.assertValues(1)
         conn.close()
     }
     @Test
     fun updateTest() {
 
         val conn = connectionFactory()
-        val testObserver = TestObserver<Int>()
 
         conn.execute("UPDATE USER SET PASSWORD = :password WHERE ID = :id")
                 .parameter("id",1)
                 .parameter("password","squirrel56")
-                .toSingle()
-                .subscribe(testObserver)
-
-        testObserver.assertValues(1)
+                .toMono()
+                .test()
+                .expectNext(1)
+                .verifyComplete()
 
         conn.close()
     }

@@ -1,65 +1,10 @@
-# RxKotlin-JDBC
+# Reactor Kotlin JDBC
 
-Fluent, concise, and easy-to-use extension functions targeting JDBC in the Kotlin language with [RxJava 2.0](https://github.com/ReactiveX/RxJava).
+Fluent, concise, and easy-to-use extension functions targeting JDBC in the Kotlin language with [Reactor Core](http://projectreactor.io/).
 
-This library is inspired by Dave Moten's [RxJava-JDBC](https://github.com/davidmoten/rxjava-jdbc) but seeks to be much more lightweight by leveraging Kotlin functions. This works with threadpool `DataSource` implementations such as [HikariCP](https://github.com/brettwooldridge/HikariCP), but can also be used with vanilla JDBC `Connection`s.
+This library is a fork of Thomas Nield [rxkotlin-jdbc](https://github.com/thomasnield/rxkotlin-jdbc) which is inspired by Dave Moten's [RxJava-JDBC](https://github.com/davidmoten/rxjava-jdbc) but seeks to be much more lightweight by leveraging Kotlin functions. This works with threadpool `DataSource` implementations such as [HikariCP](https://github.com/brettwooldridge/HikariCP), but can also be used with vanilla JDBC `Connection`s.
 
 Extension functions like `select()`, `insert()`, and `execute()` will target both `DataSource` and JDBC `Connection` types.
-
-## Binaries
-
-
-**Maven**
-
-```xml
-<dependency>
-  <groupId>org.nield</groupId>
-  <artifactId>rxkotlin-jdbc</artifactId>
-  <version>0.1.0</version>
-</dependency>
-```
-
-**Gradle**
-
-```groovy
-repositories {
-    mavenCentral()
-}
-dependencies {
-    compile 'org.nield:rxkotlin-jdbc:0.1.0'
-}
-```
-
-
-You can also use JitPack.io to build a snapshot with Maven or Gradle:
-
-**Gradle**
-
-```groovy
-repositories {
-    maven { url 'https://jitpack.io' }
-}
-dependencies {
-    compile 'com.github.thomasnield:rxkotlin-jdbc:-SNAPSHOT'
-}
-```
-
-**Maven**
-
-```xml
-<repositories>
-    <repository>
-        <id>jitpack.io</id>
-        <url>https://jitpack.io</url>
-    </repository>
-</repositories>
-
-<dependency>
-    <groupId>com.github.thomasnield</groupId>
-    <artifactId>rxkotlin-jdbc</artifactId>
-    <version>-SNAPSHOT</version>
-</dependency>
-```
 
 ## DataSource Usage Examples
 
@@ -84,25 +29,25 @@ with(ds) {
 
 // Retrieve all users
 ds.select("SELECT * FROM USER)
-        .toObservable { it.getInt("ID") to it.getString("USERNAME") }
+        .toFlux { it.getInt("ID") to it.getString("USERNAME") }
         .subscribe(::println)
 
 
 // Retrieve user with specific ID
 ds.select("SELECT * FROM USER WHERE ID = :id")
         .parameter("id", 2)
-        .toSingle { it.getInt("ID") to it.getString("USERNAME") }
+        .toMono { it.getInt("ID") to it.getString("USERNAME") }
         .subscribeBy(::println)
 
 // Execute insert which return generated keys, and re-select the inserted record with that key
 ds.insert("INSERT INTO USER (USERNAME, PASSWORD) VALUES (:username,:password)")
         .parameter("username","josephmarlon")
         .parameter("password","coffeesnob43")
-        .toFlowable { it.getInt(1) }
-        .flatMapSingle {
+        .toFlux { it.getInt(1) }
+        .flatMap {
             conn.select("SELECT * FROM USER WHERE ID = :id")
                     .parameter("id", it)
-                    .toSingle { "${it.getInt("ID")} ${it.getString("USERNAME")} ${it.getString("PASSWORD")}" }
+                    .toMono { "${it.getInt("ID")} ${it.getString("USERNAME")} ${it.getString("PASSWORD")}" }
         }
         .subscribe(::println)
 
@@ -110,7 +55,7 @@ ds.insert("INSERT INTO USER (USERNAME, PASSWORD) VALUES (:username,:password)")
 
 conn.execute("DELETE FROM USER WHERE ID = :id")
         .parameter("id",2)
-        .toSingle()
+        .toMono()
         .subscribeBy(::println)
 ```
 
@@ -122,7 +67,7 @@ You can also use a standard `Connection` with these extension functions, and clo
 val connection = DriverManager.getConnection("jdbc:sqlite::memory:")
 
 connection.select("SELECT * FROM USER)
-        .toObservable { it.getInt("ID") to it.getString("USERNAME") }
+        .toFlux { it.getInt("ID") to it.getString("USERNAME") }
         .subscribe(::println)
 
 ```
@@ -131,4 +76,4 @@ connection.select("SELECT * FROM USER)
 ## Future Developments
 
 * [ ] Batch write support
-* [ ] Observable/Flowable parameter inputs
+* [ ] Flux parameter inputs
